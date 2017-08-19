@@ -120,6 +120,22 @@ namespace rbush.net
                    b.MaxX <= a.MaxX &&
                    b.MaxY <= a.MaxY;
         }
+
+        public static int CompareMinX(IBBox a, IBBox b)
+        {
+            int d = a.MinX - b.MinX;
+            if (d < 0) return -1;
+            else if (d > 0) return 1;
+            else return 0;
+        }
+
+        public static int CompareMinY(IBBox a, IBBox b)
+        {
+            int d = a.MinY - b.MinY;
+            if (d < 0) return -1;
+            else if (d > 0) return 1;
+            else return 0;
+        }
     }
 
     public class RBush
@@ -157,34 +173,18 @@ namespace rbush.net
                 Children.Add(child);
             }
 
-            public static int CompareNodeMinX(Node a, Node b)
-            {
-                int d = a.MinX - b.MinX;
-                if (d < 0) return -1;
-                else if (d > 0) return 1;
-                else return 0;
-            }
-
-            public static int CompareNodeMinY(Node a, Node b)
-            {
-                int d = a.MinY - b.MinY;
-                if (d < 0) return -1;
-                else if (d > 0) return 1;
-                else return 0;
-            }
-
             // sorts node children by the best axis for split
             internal static void ChooseSplitAxis(Node node, int minEntries, int nodeChildsCount)
             {
                 //var compareMinX = node.leaf ? this.compareMinX : compareNodeMinX,
                 //    compareMinY = node.leaf ? this.compareMinY : compareNodeMinY,
-                int xMargin = AllDistMargin(node, minEntries, nodeChildsCount, CompareNodeMinX);
-                int yMargin = AllDistMargin(node, minEntries, nodeChildsCount, CompareNodeMinY);
+                int xMargin = AllDistMargin(node, minEntries, nodeChildsCount, CompareMinX);
+                int yMargin = AllDistMargin(node, minEntries, nodeChildsCount, CompareMinY);
 
                 // if total distributions margin value is minimal for x, sort by minX,
                 // otherwise it's already sorted by minY
                 if (xMargin < yMargin)
-                    node.Children.Sort(CompareNodeMinX);
+                    node.Children.Sort(CompareMinX);
                 // compareMinX);
             }
 
@@ -359,7 +359,7 @@ namespace rbush.net
             var node = ChooseSubtree(bbox, _data, level, ref insertPath);
             
             // put the item into the node
-            node.Children.Add(new Node(item));
+            node.Children.Add(isNode ? (Node)item : new Node(item));
             node.Extend(bbox);
 
             // split on node overflow; propagate upwards if necessary
@@ -517,6 +517,162 @@ namespace rbush.net
                 node = nodesToSearch.Count > 0 ? nodesToSearch.Pop() : null;
             }
             //return result;
+        }
+
+        public bool Collides(IBBox bbox)
+        {
+            var node = _data;
+
+            if (!BBox.Intersects(bbox, node)) return false;
+
+            var nodesToSearch = new Stack<Node>();
+
+            while (node != null)
+            {
+                for (int i = 0, len = node.Children.Count; i < len; i++)
+                {
+                    Node child = node.Children[i];
+                    BBox childBBox = child;
+
+                    if (BBox.Intersects(bbox, childBBox))
+                    {
+                        if (node.Leaf || BBox.Contains(bbox, childBBox)) return true;
+                        nodesToSearch.Push(child);
+                    }
+                }
+                node = nodesToSearch.Count > 0 ? nodesToSearch.Pop() : null;
+            }
+
+            return false;
+        }
+
+        public void AddRange(IEnumerable<IBBox> data)
+        {
+            // if (!(data && data.length)) return this;
+
+            if (data.Count() < _minEntries)
+            {
+                foreach(IBBox d in data)
+                {
+                    Insert(d);
+                }
+                return;
+            }
+
+            var copy = data.ToList();
+
+            // recursively build the tree with the given data from scratch using OMT algorithm
+            var node = Build(ref copy /*.slice()*/, 0, copy.Count - 1, 0);
+
+            if (_data.Children.Count == 0)
+            {
+                // save as is if tree is empty
+                _data = node;
+
+            }
+            else if (_data.Height == node.Height)
+            {
+                // split root if trees have the same height
+                SplitRoot(_data, node);
+            }
+            else
+            {
+                if (_data.Height < node.Height)
+                {
+                    // swap trees if inserted one is bigger
+                    var tmpNode = _data;
+                    _data = node;
+                    node = tmpNode;
+                }
+
+                // insert the small tree into the large tree at appropriate level
+                Insert(node, _data.Height - node.Height - 1, true);
+            }
+        }
+
+        private Node Build(ref List<IBBox> items, int left, int right, int height)
+        {
+            Node node;
+            var N = right - left + 1;
+            var M = _maxEntries;
+
+            if (N <= M)
+            {
+                // reached leaf level; return leaf
+                var slice = items.GetRange(left, N); //right + 1);
+
+                var sliceChild = slice.Select(sl => new Node(sl)).ToList();
+
+                node = Node.CreateNode(sliceChild/*items.slice(left, right + 1)*/);
+                node.UpdateBBox();
+                return node;
+            }
+
+            if (height == 0)
+            {
+                // target height of the bulk-loaded tree
+                height = (int)Math.Ceiling(Math.Log(N) / Math.Log(M));
+
+                // target number of root entries to maximize storage utilization
+                M = (int)Math.Ceiling(N / Math.Pow(M, height - 1));
+            }
+
+            node = Node.CreateNode(new List<Node>());
+            node.Leaf = false;
+            node.Height = height;
+
+            // split the items into M mostly square tiles
+
+            int N2 = (int)Math.Ceiling((double)N / M);
+            int N1 = (int)(N2 * Math.Ceiling(Math.Sqrt(M)));
+
+            MultiSelect(ref items, left, right, N1, BBox.CompareMinX);
+
+            for (int i = left; i <= right; i += N1)
+            {
+                int right2 = Math.Min(i + N1 - 1, right);
+
+                MultiSelect(ref items, i, right2, N2, BBox.CompareMinY);
+
+                for (int j = i; j <= right2; j += N2)
+                {
+                    int right3 = Math.Min(j + N2 - 1, right2);
+
+                    // pack each entry recursively
+                    node.Children.Add(Build(ref items, j, right3, height - 1));
+                }
+            }
+
+            node.UpdateBBox();
+
+            return node;
+        }
+
+        // sort an array so that items come in groups of n unsorted items, with groups sorted between each other;
+        // combines selection algorithm with binary divide & conquer approach
+        private void MultiSelect(ref List<IBBox> arr, int left, int right, int n, Comparison<IBBox> comparer)
+        {
+            var stack = new Stack<int>(new int[] { left, right });
+            int mid;
+
+            while (stack.Count != 0)
+            {
+                right = stack.Pop();
+                left = stack.Pop();
+
+                if (right - left <= n) continue;
+
+                mid = left + (int)Math.Ceiling((right - left) / n / (double)2) * n;
+
+                var ilist = (IList<IBBox>)arr;
+                QuickSelect<IBBox>.Select(ref ilist, mid, left, right, comparer);
+
+                //stack.Push(left, mid, mid, right);
+                stack.Push(left);
+                stack.Push(mid);
+                stack.Push(mid);
+                stack.Push(right);
+            }
         }
     }
 }
