@@ -66,4 +66,4 @@ var result = tree.Collides(new BBox(20, 40, 100, 70));
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](rbush.net/LICENSE.md) file for details
+This project is licensed under the MIT License - see the [LICENSE.md](https://github.com/freeExec/rbush.net/blob/master/MIT-LICENSE) file for details
