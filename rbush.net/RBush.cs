@@ -25,10 +25,26 @@ namespace rbush.net
 
         public BBox(int[] data)
         {
-            MinX = data[0];
-            MinY = data[1];
-            MaxX = data[2];
-            MaxY = data[3];
+            if (data.Length == 2)
+            {
+                MinX = data[0];
+                MinY = data[1];
+                MaxX = data[0];
+                MaxY = data[1];
+            } else if (data.Length == 4)
+            {
+                MinX = data[0];
+                MinY = data[1];
+                MaxX = data[2];
+                MaxY = data[3];
+            }
+            else throw new ArgumentException("Data length is 2 or 4.");
+        }
+
+        public BBox(int x, int y)
+        {
+            MinX = MaxX = x;
+            MinY = MaxY = y;
         }
 
         public BBox(int minX, int minY, int maxX, int maxY)
@@ -97,7 +113,7 @@ namespace rbush.net
                    Math.Max(0, maxY - minY);
         }
 
-        public bool Intersects(IBBox b)
+        public virtual bool Intersects(IBBox b)
         {
             return b.MinX <= MaxX &&
                    b.MinY <= MaxY &&
@@ -111,6 +127,14 @@ namespace rbush.net
                    b.MinY <= a.MaxY &&
                    b.MaxX >= a.MinX &&
                    b.MaxY >= a.MinY;
+        }
+
+        public virtual bool Contains(IBBox a)
+        {
+            return MinX <= a.MinX &&
+                   MinY <= a.MinY &&
+                   a.MaxX <= MaxX &&
+                   a.MaxY <= MaxY;
         }
 
         public static bool Contains(IBBox a, IBBox b)
@@ -472,7 +496,7 @@ namespace rbush.net
             var node = _data;
             var result = new List<IBBox>();
 
-            if (!BBox.Intersects(bbox, node)) return result;
+            if (!node.Intersects(bbox)) return result;
             
             var nodesToSearch = new Stack<Node>();
             //var nodesToSearch = new List<Node>();
@@ -485,7 +509,7 @@ namespace rbush.net
                     Node child = node.Children[i];
                     BBox childBBox = child;
 
-                    if (BBox.Intersects(bbox, childBBox))
+                    if (childBBox.Intersects(bbox))
                     {
                         if (node.Leaf) result.Add(child.ExternalObject);
                         else if (BBox.Contains(bbox, childBBox)) AllCombine(child, ref result);
@@ -506,7 +530,8 @@ namespace rbush.net
                 if (node.Leaf)
                 {
                     //result.AddRange(node.Children);
-                    result.Add(node.ExternalObject);
+                    //result.Add(node.ExternalObject);
+                    result.AddRange(node.Children.Select(c => c.ExternalObject));
                 }
                 else
                 {
@@ -523,7 +548,7 @@ namespace rbush.net
         {
             var node = _data;
 
-            if (!BBox.Intersects(bbox, node)) return false;
+            if (!node.Intersects(bbox)) return false;
 
             var nodesToSearch = new Stack<Node>();
 
@@ -534,7 +559,7 @@ namespace rbush.net
                     Node child = node.Children[i];
                     BBox childBBox = child;
 
-                    if (BBox.Intersects(bbox, childBBox))
+                    if (childBBox.Intersects(bbox))
                     {
                         if (node.Leaf || BBox.Contains(bbox, childBBox)) return true;
                         nodesToSearch.Push(child);
