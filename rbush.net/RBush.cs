@@ -217,8 +217,6 @@ namespace rbush.net
             {
                 node.Children.Sort(comparison);
 
-                // var leftBBox = DistBBox(node, 0, minEntries);
-                // var rightBBox = DistBBox(node, nodeChildsCount - minEntries, nodeChildsCount);
                 var leftBBox = node.DistBBox(0, minEntries);
                 var rightBBox = node.DistBBox(nodeChildsCount - minEntries, nodeChildsCount);
                 int margin = leftBBox.Margin + rightBBox.Margin;
@@ -255,25 +253,6 @@ namespace rbush.net
                 return destNode;
             }
 
-            // min bounding rectangle of node children from k to p-1
-            /*internal static BBox DistBBox(Node node, int k, int p, BBox destNode = null) //Node destNode = null)
-            {
-                if (destNode == null) destNode = new BBox(); //CreateNode(null);
-                /*destNode.MinX = int.MaxValue;
-                destNode.MinY = int.MaxValue;
-                destNode.MaxX = int.MinValue;
-                destNode.MaxY = int.MinValue;*/
-            /*    destNode.Reset();
-
-                for (int i = k; i < p; i++)
-                {
-                    var child = node.Children[i];
-                    destNode.Extend(child); //node.Leaf ? toBBox(child) : child);
-                }
-
-                return destNode;
-            }*/
-
             // calculate node's bbox from bboxes of its children
             public void UpdateBBox()
             {
@@ -284,16 +263,9 @@ namespace rbush.net
                 MaxY = bbox.MaxY;
             }
 
-            // calculate node's bbox from bboxes of its children
-            /*public static BBox CalcBBox(Node node)
-            {
-                return DistBBox(node, 0, node.Children.Count, node);
-            }*/
-
             public static int ChooseSplitIndex(Node node, int minEntries, int nodeChildsCount)
             {
 
-                //var i, bbox1, bbox2, overlap, area, minOverlap, minArea, index;
                 int index = 0;
 
                 int minOverlap = int.MaxValue;
@@ -301,8 +273,6 @@ namespace rbush.net
 
                 for (int i = minEntries; i <= nodeChildsCount - minEntries; i++)
                 {
-                    // BBox bbox1 = DistBBox(node, 0, i);
-                    // BBox bbox2 = DistBBox(node, i, nodeChildsCount);
                     BBox bbox1 = node.DistBBox(0, i);
                     BBox bbox2 = node.DistBBox(i, nodeChildsCount);
 
@@ -361,20 +331,19 @@ namespace rbush.net
 
         public void Insert(IBBox item)
         {
-            /*if (item == null)
+            if (item == null)
             {
                 throw new ArgumentNullException("item");
-            }*/
+            }
             Insert(item, _data.Height - 1, false);
-        }
-
-        private void InitFormat()
-        {
-
         }
 
         private void Insert(IBBox item, int level, bool isNode)
         {
+            if (item == null)
+            {
+                throw new ArgumentNullException("item");
+            }
             var bbox = item; //isNode ? item : new Node(item);
 
             var insertPath = new List<Node>();
@@ -418,12 +387,10 @@ namespace rbush.net
             newNode.Height = node.Height;
             newNode.Leaf = node.Leaf;
 
-            // Node.CalcBBox(node);
-            // Node.CalcBBox(newNode);
             node.UpdateBBox();
             newNode.UpdateBBox();
 
-            if ( /* level */ level != 0) insertPath[level - 1].Children.Add(newNode);
+            if (level != 0) insertPath[level - 1].Children.Add(newNode);
             else SplitRoot(node, newNode);
         }
 
@@ -433,7 +400,6 @@ namespace rbush.net
             _data = Node.CreateNode(new List<Node>() { node, newNode });
             _data.Height = node.Height + 1;
             _data.Leaf = false;
-            //Node.CalcBBox(_data);
             _data.UpdateBBox();
         }
 
@@ -463,7 +429,7 @@ namespace rbush.net
                 for (int i = 0, len = node.Children.Count; i < len; i++)
                 {
                     child = node.Children[i];
-                    int area = child.Area; //bboxArea(child);
+                    int area = child.Area;
                     int enlargement = child.EnlargedArea(bbox) - area;
 
                     // choose entry with the least area enlargement
@@ -499,8 +465,6 @@ namespace rbush.net
             if (!node.Intersects(bbox)) return result;
             
             var nodesToSearch = new Stack<Node>();
-            //var nodesToSearch = new List<Node>();
-            //i, len, child, childBBox;
 
             while (node != null)
             {
