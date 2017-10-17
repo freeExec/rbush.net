@@ -80,9 +80,9 @@ namespace rbush.net
             MaxY = maxY;
         }
 
-        public int Area
+        public long Area
         {
-            get { return (MaxX - MinX) * (MaxY - MinY); }
+            get { return (MaxX - MinX) * (long)(MaxY - MinY); }
         }
 
         public static int EnlargedArea(IBBox a, IBBox b)
@@ -91,9 +91,9 @@ namespace rbush.net
                    (Math.Max(b.MaxY, a.MaxY) - Math.Min(b.MinY, a.MinY));
         }
 
-        public int EnlargedArea(IBBox b)
+        public long EnlargedArea(IBBox b)
         {
-            return (Math.Max(b.MaxX, MaxX) - Math.Min(b.MinX, MinX)) *
+            return (Math.Max(b.MaxX, MaxX) - Math.Min((long)b.MinX, MinX)) *
                    (Math.Max(b.MaxY, MaxY) - Math.Min(b.MinY, MinY));
         }
 
@@ -127,12 +127,12 @@ namespace rbush.net
             MaxY = int.MinValue;
         }
 
-        public int IntersectionArea(IBBox b)
+        public long IntersectionArea(IBBox b)
         {
-            int minX = Math.Max(MinX, b.MinX);
-            int minY = Math.Max(MinY, b.MinY);
-            int maxX = Math.Min(MaxX, b.MaxX);
-            int maxY = Math.Min(MaxY, b.MaxY);
+            long minX = Math.Max(MinX, b.MinX);
+            long minY = Math.Max(MinY, b.MinY);
+            long maxX = Math.Min(MaxX, b.MaxX);
+            long maxY = Math.Min(MaxY, b.MaxY);
 
             return Math.Max(0, maxX - minX) *
                    Math.Max(0, maxY - minY);
@@ -293,16 +293,16 @@ namespace rbush.net
 
                 int index = 0;
 
-                int minOverlap = int.MaxValue;
-                int minArea = int.MaxValue;
+                long minOverlap = long.MaxValue;
+                long minArea = long.MaxValue;
 
                 for (int i = minEntries; i <= nodeChildsCount - minEntries; i++)
                 {
                     BBox bbox1 = node.DistBBox(0, i);
                     BBox bbox2 = node.DistBBox(i, nodeChildsCount);
 
-                    int overlap = bbox1.IntersectionArea(bbox2);
-                    int area = bbox1.Area + bbox2.Area;
+                    long overlap = bbox1.IntersectionArea(bbox2);
+                    long area = bbox1.Area + bbox2.Area;
 
                     // choose distribution with minimum overlap
                     if (overlap < minOverlap)
@@ -441,7 +441,7 @@ namespace rbush.net
         {
             Node child;
             Node targetNode = null;
-            int minArea, minEnlargement;
+            long minArea, minEnlargement;
 
             while (true)
             {
@@ -454,8 +454,8 @@ namespace rbush.net
                 for (int i = 0, len = node.Children.Count; i < len; i++)
                 {
                     child = node.Children[i];
-                    int area = child.Area;
-                    int enlargement = child.EnlargedArea(bbox) - area;
+                    long area = child.Area;
+                    long enlargement = child.EnlargedArea(bbox) - area;
 
                     // choose entry with the least area enlargement
                     if (enlargement < minEnlargement)
