@@ -26,7 +26,6 @@ THE SOFTWARE.
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace rbush.net
 {
@@ -36,6 +35,25 @@ namespace rbush.net
         int MaxX { get; set; }
         int MinY { get; set; }
         int MaxY { get; set; }
+    }
+
+    public static class BBoxHelper
+    {
+        public static void Expand(this IBBox a, int amount)
+        {
+            a.MinX -= amount;
+            a.MaxX += amount;
+            a.MinY -= amount;
+            a.MaxY += amount;
+        }
+
+        public static void Extend(this IBBox a, IBBox b)
+        {
+            a.MinX = Math.Min(a.MinX, b.MinX);
+            a.MinY = Math.Min(a.MinY, b.MinY);
+            a.MaxX = Math.Max(a.MaxX, b.MaxX);
+            a.MaxY = Math.Max(a.MaxY, b.MaxY);
+        }
     }
 
     public class BBox : IBBox
@@ -97,27 +115,40 @@ namespace rbush.net
                    (Math.Max(b.MaxY, MaxY) - Math.Min(b.MinY, MinY));
         }
 
-        public void Extend(IBBox b)
+        /*public void Extend(IBBox b)
         {
             MinX = Math.Min(MinX, b.MinX);
             MinY = Math.Min(MinY, b.MinY);
             MaxX = Math.Max(MaxX, b.MaxX);
             MaxY = Math.Max(MaxY, b.MaxY);
-        }
+        }*/
 
-        public static BBox Extend(IBBox a, IBBox b)
+        /*public static BBox Extend(IBBox a, IBBox b)
         {
             int minX = Math.Min(a.MinX, b.MinX);
             int minY = Math.Min(a.MinY, b.MinY);
             int maxX = Math.Max(a.MaxX, b.MaxX);
             int maxY = Math.Max(a.MaxY, b.MaxY);
             return new BBox(minX, minY, maxX, maxY);
-        }
+        }*/
 
         public int Margin
         {
             get { return (MaxX - MinX) + (MaxY - MinY); }
         }
+
+        /*public static IBBox Expand(IBBox a, int amount)
+        {
+            return new BBox(a.MinX - amount, a.MinY - amount, a.MaxX + amount, a.MaxY + amount);
+        }*/
+
+        /*public void Expand(int amount)
+        {
+            MinX -= amount;
+            MaxX += amount;
+            MinY -= amount;
+            MaxY += amount;
+        }*/
 
         public void Reset()
         {
@@ -449,7 +480,7 @@ namespace rbush.net
 
                 if (node.Leaf || path.Count - 1 == level) break;
 
-                minArea = minEnlargement = int.MaxValue;
+                minArea = minEnlargement = long.MaxValue;
 
                 for (int i = 0, len = node.Children.Count; i < len; i++)
                 {
