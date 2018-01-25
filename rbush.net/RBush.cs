@@ -54,6 +54,14 @@ namespace rbush.net
             a.MaxX = Math.Max(a.MaxX, b.MaxX);
             a.MaxY = Math.Max(a.MaxY, b.MaxY);
         }
+
+        public static void Extend(this IBBox a, int minX, int minY, int maxX, int maxY)
+        {
+            a.MinX = Math.Min(a.MinX, minX);
+            a.MinY = Math.Min(a.MinY, minY);
+            a.MaxX = Math.Max(a.MaxX, maxX);
+            a.MaxY = Math.Max(a.MaxY, maxY);
+        }
     }
 
     public class BBox : IBBox
@@ -361,6 +369,7 @@ namespace rbush.net
 
         private readonly int _maxEntries;
         private readonly int _minEntries;
+        private readonly List<IBBox> _cacheListResult = new List<IBBox>();
 
         private Node _data;
 
@@ -515,10 +524,16 @@ namespace rbush.net
 
         public List<IBBox> Search(IBBox bbox)
         {
-            var node = _data;
-            var result = new List<IBBox>();
+            return SearchOrNull(bbox) ?? new List<IBBox>();
+        }
 
-            if (!node.Intersects(bbox)) return result;
+        public List<IBBox> SearchOrNull(IBBox bbox)
+        {
+            var node = _data;
+            _cacheListResult.Clear();
+            var result = _cacheListResult;
+
+            if (!node.Intersects(bbox)) return null;
             
             var nodesToSearch = new Stack<Node>();
 
@@ -539,7 +554,42 @@ namespace rbush.net
                 node = nodesToSearch.Count > 0 ? nodesToSearch.Pop() : null;
             }
 
-            return result;
+            return result.Count == 0 ? null : result.ToList();
+        }
+
+        public List<IBBox> SearchParents(IBBox bbox)
+        {
+            return SearchParentsOrNull(bbox) ?? new List<IBBox>();
+        }
+
+        public List<IBBox> SearchParentsOrNull(IBBox bbox)
+        {
+            var node = _data;
+            _cacheListResult.Clear();
+            var result = _cacheListResult;
+
+            if (!node.Contains(bbox)) return null;
+
+            var nodesToSearch = new Stack<Node>();
+
+            while (node != null)
+            {
+                for (int i = 0, len = node.Children.Count; i < len; i++)
+                {
+                    Node child = node.Children[i];
+                    BBox childBBox = child;
+
+                    if (childBBox.Contains(bbox))
+                    {
+                        if (node.Leaf) result.Add(child.ExternalObject);
+                        else if (BBox.Contains(bbox, childBBox)) AllCombine(child, ref result);
+                        else nodesToSearch.Push(child);
+                    }
+                }
+                node = nodesToSearch.Count > 0 ? nodesToSearch.Pop() : null;
+            }
+
+            return result.Count == 0 ? null : result.ToList();
         }
 
         private void AllCombine(Node node, ref List<IBBox> result)
