@@ -111,6 +111,16 @@ namespace rbush.net
             get { return (MaxX - MinX) * (long)(MaxY - MinY); }
         }
 
+        public int[] Center
+        {
+            get { return new int[] { (MaxX + MinX) / 2, (MaxY + MinY) / 2 }; }
+        }
+
+        public BBox CenterAsBBox
+        {
+            get { return new BBox((MaxX + MinX) / 2, (MaxY + MinY) / 2); }
+        }
+
         public static int EnlargedArea(IBBox a, IBBox b)
         {
             return (Math.Max(b.MaxX, a.MaxX) - Math.Min(b.MinX, a.MinX)) *
