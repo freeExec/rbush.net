@@ -113,12 +113,12 @@ namespace rbush.net
 
         public int[] Center
         {
-            get { return new int[] { (MaxX + MinX) / 2, (MaxY + MinY) / 2 }; }
+            get { return new int[] { MaxX / 2 + MinX / 2, MaxY / 2 + MinY / 2 }; }
         }
 
         public BBox CenterAsBBox
         {
-            get { return new BBox((MaxX + MinX) / 2, (MaxY + MinY) / 2); }
+            get { return new BBox(MaxX / 2 + MinX / 2, MaxY / 2 + MinY / 2); }
         }
 
         public static int EnlargedArea(IBBox a, IBBox b)
