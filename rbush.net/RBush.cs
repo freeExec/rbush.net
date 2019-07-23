@@ -62,6 +62,14 @@ namespace rbush.net
             a.MaxX = Math.Max(a.MaxX, maxX);
             a.MaxY = Math.Max(a.MaxY, maxY);
         }
+
+        public static bool Equals(this IBBox a, IBBox b)
+        {
+            return b.MinX == a.MinX &&
+                   b.MinY == a.MinY &&
+                   b.MaxX == a.MaxX &&
+                   b.MaxY == a.MaxY;
+        }
     }
 
     public class BBox : IBBox
@@ -92,10 +100,10 @@ namespace rbush.net
             else throw new ArgumentException("Data length is 2 or 4.");
         }
 
-        public BBox(int x, int y)
+        public BBox(int xLon, int yLat)
         {
-            MinX = MaxX = x;
-            MinY = MaxY = y;
+            MinX = MaxX = xLon;
+            MinY = MaxY = yLat;
         }
 
         public BBox(int minX, int minY, int maxX, int maxY)
@@ -133,40 +141,10 @@ namespace rbush.net
                    (Math.Max(b.MaxY, MaxY) - Math.Min(b.MinY, MinY));
         }
 
-        /*public void Extend(IBBox b)
-        {
-            MinX = Math.Min(MinX, b.MinX);
-            MinY = Math.Min(MinY, b.MinY);
-            MaxX = Math.Max(MaxX, b.MaxX);
-            MaxY = Math.Max(MaxY, b.MaxY);
-        }*/
-
-        /*public static BBox Extend(IBBox a, IBBox b)
-        {
-            int minX = Math.Min(a.MinX, b.MinX);
-            int minY = Math.Min(a.MinY, b.MinY);
-            int maxX = Math.Max(a.MaxX, b.MaxX);
-            int maxY = Math.Max(a.MaxY, b.MaxY);
-            return new BBox(minX, minY, maxX, maxY);
-        }*/
-
         public int Margin
         {
             get { return (MaxX - MinX) + (MaxY - MinY); }
         }
-
-        /*public static IBBox Expand(IBBox a, int amount)
-        {
-            return new BBox(a.MinX - amount, a.MinY - amount, a.MaxX + amount, a.MaxY + amount);
-        }*/
-
-        /*public void Expand(int amount)
-        {
-            MinX -= amount;
-            MaxX += amount;
-            MinY -= amount;
-            MaxY += amount;
-        }*/
 
         public void Reset()
         {
@@ -185,6 +163,35 @@ namespace rbush.net
 
             return Math.Max(0, maxX - minX) *
                    Math.Max(0, maxY - minY);
+        }
+
+        public static bool operator ==(BBox a, IBBox b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (ReferenceEquals(a, null) || ReferenceEquals(b, null)) return false;
+
+            return b.MinX == a.MinX &&
+                   b.MinY == a.MinY &&
+                   b.MaxX == a.MaxX &&
+                   b.MaxY == a.MaxY;
+        }
+
+        public static bool operator !=(BBox a, IBBox b)
+        {
+            return !(a == b);
+        }
+
+        public override bool Equals(object obj)
+        {
+            var otherBBox = obj as IBBox;
+            if (otherBBox == null)
+                return false;
+            return BBoxHelper.Equals(this, otherBBox);
+        }
+
+        public override int GetHashCode()
+        {
+            return MinX.GetHashCode() >> 3 ^ MaxX.GetHashCode() << 3 ^ MinY.GetHashCode() >> 2 ^ MaxY.GetHashCode() << 2;
         }
 
         public virtual bool Intersects(IBBox b)
@@ -425,7 +432,7 @@ namespace rbush.net
 
             // find the best node for accommodating the item, saving all nodes along the path too
             var node = ChooseSubtree(bbox, _data, level, ref insertPath);
-            
+
             // put the item into the node
             node.Children.Add(isNode ? (Node)item : new Node(item));
             node.Extend(bbox);
@@ -544,7 +551,7 @@ namespace rbush.net
             var result = _cacheListResult;
 
             if (!node.Intersects(bbox)) return null;
-            
+
             var nodesToSearch = new Stack<Node>();
 
             while (node != null)
