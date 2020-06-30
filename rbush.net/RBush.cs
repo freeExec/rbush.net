@@ -1,5 +1,5 @@
 ﻿/*
-Copyright(c) 2017 freeExec | https://github.com/freeExec/rbush.net
+Copyright(c) 2017-2020 freeExec | https://github.com/freeExec/rbush.net
 this product based on rbush - Copyright (c) 2016 Vladimir Agafonkin
 
 The MIT License (MIT)
@@ -114,6 +114,14 @@ namespace rbush.net
             MaxY = maxY;
         }
 
+        public BBox(IBBox other)
+        {
+            MinX = other.MinX;
+            MinY = other.MinY;
+            MaxX = other.MaxX;
+            MaxY = other.MaxY;
+        }
+
         public long Area
         {
             get { return (MaxX - MinX) * (long)(MaxY - MinY); }
@@ -170,10 +178,7 @@ namespace rbush.net
             if (ReferenceEquals(a, b)) return true;
             if (ReferenceEquals(a, null) || ReferenceEquals(b, null)) return false;
 
-            return b.MinX == a.MinX &&
-                   b.MinY == a.MinY &&
-                   b.MaxX == a.MaxX &&
-                   b.MaxY == a.MaxY;
+            return BBoxHelper.Equals(a, b);
         }
 
         public static bool operator !=(BBox a, IBBox b)
@@ -243,40 +248,36 @@ namespace rbush.net
         }
     }
 
-    public class RBush
+    public class RBush<T>
     {
-        public class Node : BBox
+        private class Node : BBox
         {
-            public bool Leaf;
-            public int Height;
-            public List<Node> Children;
+            internal bool Leaf;
+            internal int Height;
+            internal List<Node> Children;
 
-            public readonly IBBox ExternalObject;
+            internal readonly T ExternalObject;
 
-            public Node(int[] data)
-                : base(data)
-            { }
-
-            public Node(int minX, int minY, int maxX, int maxY)
+            private Node(int minX, int minY, int maxX, int maxY)
                 : base(minX, minY, maxX, maxY)
             { }
 
-            public Node(IBBox externalObject)
-                : base(externalObject.MinX, externalObject.MinY, externalObject.MaxX, externalObject.MaxY)
+            internal Node(IBBox bbox, T externalObject)
+                : base(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY)
             {
                 ExternalObject = externalObject;
             }
 
-            public static Node CreateNode(List<Node> children)
+            internal static Node CreateNode(List<Node> children)
             {
                 return new Node(int.MaxValue, int.MaxValue, int.MinValue, int.MinValue) { Leaf = true, Height = 1, Children = children };
             }
 
-            public void AddChild(Node child)
+            /*internal void AddChild(Node child)
             {
                 if (Children == null) Children = new List<Node>();
                 Children.Add(child);
-            }
+            }*/
 
             // sorts node children by the best axis for split
             internal static void ChooseSplitAxis(Node node, int minEntries, int nodeChildsCount)
@@ -294,7 +295,7 @@ namespace rbush.net
             }
 
             // total margin of all possible split distributions where each node is at least m full
-            internal static int AllDistMargin(Node node, int minEntries, int nodeChildsCount, Comparison<Node> comparison)
+            private static int AllDistMargin(Node node, int minEntries, int nodeChildsCount, Comparison<Node> comparison)
             {
                 node.Children.Sort(comparison);
 
@@ -320,7 +321,7 @@ namespace rbush.net
             }
 
             // min bounding rectangle of node children from k to p-1
-            public BBox DistBBox(int k, int p)
+            private BBox DistBBox(int k, int p)
             {
                 var destNode = new BBox();
                 destNode.Reset();
@@ -335,7 +336,7 @@ namespace rbush.net
             }
 
             // calculate node's bbox from bboxes of its children
-            public void UpdateBBox()
+            internal void UpdateBBox()
             {
                 var bbox = DistBBox(0, Children.Count);
                 MinX = bbox.MinX;
@@ -344,9 +345,8 @@ namespace rbush.net
                 MaxY = bbox.MaxY;
             }
 
-            public static int ChooseSplitIndex(Node node, int minEntries, int nodeChildsCount)
+            internal static int ChooseSplitIndex(Node node, int minEntries, int nodeChildsCount)
             {
-
                 int index = 0;
 
                 long minOverlap = long.MaxValue;
@@ -386,18 +386,47 @@ namespace rbush.net
 
         private readonly int _maxEntries;
         private readonly int _minEntries;
-        private readonly List<IBBox> _cacheListResult = new List<IBBox>();
+        private readonly List<T> _cacheListResult = new List<T>();
+
+        private readonly Func<T, IBBox> _geomSelecter;
 
         private Node _data;
 
-        public Node All { get { return _data; } }
-
-        public RBush()
-            : this(9)        // max entries in a node is 9 by default
+        public IEnumerable<T> All
         {
+            get
+            {
+                var nodesToSearch = new Stack<Node>();
+                Node node = _data;
+                while (node != null)
+                {
+                    if (node.Leaf)
+                    {
+                        foreach (var c in node.Children)
+                            yield return c.ExternalObject;
+                    }
+                    else
+                    {
+                        foreach (var c in node.Children)
+                            nodesToSearch.Push(c);
+                    }
+
+                    node = nodesToSearch.Count > 0 ? nodesToSearch.Pop() : null;
+                }
+            }
         }
 
-        public RBush(int maxEntries)
+        public RBush(Func<T, IBBox> geomSelecter)
+            : this(9, geomSelecter)   // max entries in a node is 9 by default
+        { }
+
+        public RBush(int maxEntries, Func<T, IBBox> geomSelecter)
+            : this(maxEntries)
+        {
+            _geomSelecter = geomSelecter;
+        }
+
+        private RBush(int maxEntries)
         {
             _maxEntries = Math.Max(4, maxEntries);
             // min node fill is 40% for best performance
@@ -406,27 +435,30 @@ namespace rbush.net
             Clear();
         }
 
+        private int CompareMinX(T a, T b) => BBox.CompareMinX(_geomSelecter(a), _geomSelecter(b));
+        private int CompareMinY(T a, T b) => BBox.CompareMinY(_geomSelecter(a), _geomSelecter(b));
+
         public void Clear()
         {
             _data = Node.CreateNode(new List<Node>());
         }
 
-        public void Insert(IBBox item)
+        public void Insert(T item)
         {
             if (item == null)
             {
                 throw new ArgumentNullException("item");
             }
-            Insert(item, _data.Height - 1, false);
+            Insert(new Node(_geomSelecter(item), item), _data.Height - 1);
         }
 
-        private void Insert(IBBox item, int level, bool isNode)
+        private void Insert(Node item, int level)
         {
             if (item == null)
             {
                 throw new ArgumentNullException("item");
             }
-            var bbox = item; //isNode ? item : new Node(item);
+            var bbox = item;
 
             var insertPath = new List<Node>();
 
@@ -434,7 +466,7 @@ namespace rbush.net
             var node = ChooseSubtree(bbox, _data, level, ref insertPath);
 
             // put the item into the node
-            node.Children.Add(isNode ? (Node)item : new Node(item));
+            node.Children.Add(item);
             node.Extend(bbox);
 
             // split on node overflow; propagate upwards if necessary
@@ -539,12 +571,12 @@ namespace rbush.net
             return node;
         }
 
-        public List<IBBox> Search(IBBox bbox)
+        public List<T> Search(IBBox bbox)
         {
-            return SearchOrNull(bbox) ?? new List<IBBox>();
+            return SearchOrNull(bbox) ?? new List<T>();
         }
 
-        public List<IBBox> SearchOrNull(IBBox bbox)
+        public List<T> SearchOrNull(IBBox bbox)
         {
             var node = _data;
             _cacheListResult.Clear();
@@ -574,12 +606,12 @@ namespace rbush.net
             return result.Count == 0 ? null : result.ToList();
         }
 
-        public List<IBBox> SearchParents(IBBox bbox)
+        public List<T> SearchParents(IBBox bbox)
         {
-            return SearchParentsOrNull(bbox) ?? new List<IBBox>();
+            return SearchParentsOrNull(bbox) ?? new List<T>();
         }
 
-        public List<IBBox> SearchParentsOrNull(IBBox bbox)
+        public List<T> SearchParentsOrNull(IBBox bbox)
         {
             var node = _data;
             _cacheListResult.Clear();
@@ -609,15 +641,13 @@ namespace rbush.net
             return result.Count == 0 ? null : result.ToList();
         }
 
-        private void AllCombine(Node node, ref List<IBBox> result)
+        private void AllCombine(Node node, ref List<T> result)
         {
             var nodesToSearch = new Stack<Node>();
             while (node != null)
             {
                 if (node.Leaf)
                 {
-                    //result.AddRange(node.Children);
-                    //result.Add(node.ExternalObject);
                     result.AddRange(node.Children.Select(c => c.ExternalObject));
                 }
                 else
@@ -628,7 +658,6 @@ namespace rbush.net
 
                 node = nodesToSearch.Count > 0 ? nodesToSearch.Pop() : null;
             }
-            //return result;
         }
 
         public bool Collides(IBBox bbox)
@@ -658,13 +687,13 @@ namespace rbush.net
             return false;
         }
 
-        public void AddRange(IEnumerable<IBBox> data)
+        public void AddRange(IEnumerable<T> data)
         {
             // if (!(data && data.length)) return this;
 
             if (data.Count() < _minEntries)
             {
-                foreach(IBBox d in data)
+                foreach(T d in data)
                 {
                     Insert(d);
                 }
@@ -698,11 +727,11 @@ namespace rbush.net
                 }
 
                 // insert the small tree into the large tree at appropriate level
-                Insert(node, _data.Height - node.Height - 1, true);
+                Insert(node, _data.Height - node.Height - 1);
             }
         }
 
-        private Node Build(ref List<IBBox> items, int left, int right, int height)
+        private Node Build(ref List<T> items, int left, int right, int height)
         {
             Node node;
             var N = right - left + 1;
@@ -713,7 +742,7 @@ namespace rbush.net
                 // reached leaf level; return leaf
                 var slice = items.GetRange(left, N); //right + 1);
 
-                var sliceChild = slice.Select(sl => new Node(sl)).ToList();
+                var sliceChild = slice.Select(sl => new Node(_geomSelecter(sl), sl)).ToList();
 
                 node = Node.CreateNode(sliceChild/*items.slice(left, right + 1)*/);
                 node.UpdateBBox();
@@ -738,13 +767,13 @@ namespace rbush.net
             int N2 = (int)Math.Ceiling((double)N / M);
             int N1 = (int)(N2 * Math.Ceiling(Math.Sqrt(M)));
 
-            MultiSelect(ref items, left, right, N1, BBox.CompareMinX);
+            MultiSelect(ref items, left, right, N1, CompareMinX);
 
             for (int i = left; i <= right; i += N1)
             {
                 int right2 = Math.Min(i + N1 - 1, right);
 
-                MultiSelect(ref items, i, right2, N2, BBox.CompareMinY);
+                MultiSelect(ref items, i, right2, N2, CompareMinY);
 
                 for (int j = i; j <= right2; j += N2)
                 {
@@ -762,7 +791,7 @@ namespace rbush.net
 
         // sort an array so that items come in groups of n unsorted items, with groups sorted between each other;
         // combines selection algorithm with binary divide & conquer approach
-        private void MultiSelect(ref List<IBBox> arr, int left, int right, int n, Comparison<IBBox> comparer)
+        private void MultiSelect(ref List<T> arr, int left, int right, int n, Comparison<T> comparer)
         {
             var stack = new Stack<int>(new int[] { left, right });
             int mid;
@@ -776,8 +805,8 @@ namespace rbush.net
 
                 mid = left + (int)Math.Ceiling((right - left) / n / (double)2) * n;
 
-                var ilist = (IList<IBBox>)arr;
-                QuickSelect<IBBox>.Select(ref ilist, mid, left, right, comparer);
+                var ilist = (IList<T>)arr;
+                QuickSelect<T>.Select(ref ilist, mid, left, right, comparer);
 
                 //stack.Push(left, mid, mid, right);
                 stack.Push(left);
@@ -786,5 +815,12 @@ namespace rbush.net
                 stack.Push(right);
             }
         }
+    }
+
+    public class RBush : RBush<IBBox>
+    {
+        public RBush()
+            : base(b => b)
+        { }
     }
 }
