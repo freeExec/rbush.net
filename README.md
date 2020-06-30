@@ -14,6 +14,16 @@ var tree = new RBush();
 ```
 var tree = new RBush(16);
 ```
+Если одно из полей класса реализует интейфейс IBBox
+```
+class BigData
+{
+    public int Id;
+    public BBox Point;
+}
+
+var treeBigdata = new RBush<BigData>(bd => bd.Point);
+```
 ## Добавление данных
 ```
 var arrData = new List<int[]>()
@@ -29,7 +39,18 @@ for (int r = 0; r < arrData.Count; r++)
 }
 ```
 ## Удаление
-Удаление поэлементно не реализовано, но возможно.
+Удаление поэлементно
+
+```
+tree.Remove(myItem);
+```
+
+Удаление всех объектов попавших в BBox
+```
+var filterBbox = new BBox(10, 20, 40, 30);
+tree.Remove(filterBbox, e => true);
+```
+Либо в `Predicate` фильтруете какие объекты, попавшие в BBox удалить.
 
 Очистить всё
 ```
