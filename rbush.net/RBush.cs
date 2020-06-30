@@ -484,6 +484,112 @@ namespace rbush.net
             AdjustParentBBoxes(bbox, insertPath, level);
         }
 
+        public void Remove(T item)
+        {
+            Remove(item, ext => ext.Equals(item));
+        }
+
+        public void Remove(T item, Predicate<T> match)
+        {
+            if (item == null)
+            {
+                throw new ArgumentNullException("item");
+            }
+
+            if (match == null)
+            {
+                throw new ArgumentNullException("match");
+            }
+
+            var node = this._data;
+            var bbox = _geomSelecter(item);
+            var path = new List<Node>();
+            var indexes = new Stack<int>();
+            int i = 0;
+            Node parent = null;
+            int index;
+            bool goingUp = false;
+
+            // depth-first iterative tree traversal
+            while (node != null || path.Count > 0)
+            {
+
+                if (node == null)
+                { // go up
+                    node = path.Last();
+                    path.RemoveAt(path.Count - 1);
+
+                    parent = path.Last(); //[path.Count - 1];
+                    i = indexes.Pop();
+                    goingUp = true;
+                }
+
+                if (node.Leaf)
+                { // check current node
+                    index = FindItem(/*item, */node.Children, match);
+
+                    if (index != -1)
+                    {
+                        // item found, remove the item and condense tree upwards
+                        var splice = node.Children.GetRange(index, 1);
+                        node.Children.RemoveRange(index, 1);
+                        path.Add(node);
+                        Condense(path);
+                        return;
+                    }
+                }
+
+                if (!goingUp && !node.Leaf && node.Contains(bbox))
+                { // go down
+                    path.Add(node);
+                    indexes.Push(i);
+                    i = 0;
+                    parent = node;
+                    node = node.Children[0];
+
+                }
+                else if (parent != null)
+                { // go right
+                    i++;
+                    node = parent.Children[i];
+                    goingUp = false;
+
+                }
+                else node = null; // nothing found
+            }
+
+            return;
+        }
+
+        private void Condense(List<Node> path)
+        {
+            // go through the path, removing empty nodes and updating bboxes
+            for (int i = path.Count - 1; i >= 0; i--)
+            {
+                if (path[i].Children.Count == 0)
+                {
+                    if (i > 0)
+                    {
+                        var siblings = path[i - 1].Children;
+                        siblings.RemoveRange(siblings.IndexOf(path[i]), 1);
+                    }
+                    else Clear();
+                }
+                else path[i].UpdateBBox();
+            }
+        }
+
+        private int FindItem(/*T item, */List<Node> items, Predicate<T> match)
+        {
+            //if (match == null) return items.IndexOf(item);
+
+            for (var i = 0; i < items.Count; i++)
+            {
+                if (match(/*item.ExternalObject,*/ items[i].ExternalObject)) return i;
+            }
+            return -1;
+        }
+
         // split overflowed node into two
         private void Split(ref List<Node> insertPath, int level)
         {
